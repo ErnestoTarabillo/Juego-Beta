@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Shooter Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-image: url("lanave.jpg"); /* Reemplaza con la ruta de tu imagen */
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 1px solid #fff;
+            display: block;
+        }
+        .button {
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+            display: block;
+            margin: 0 auto;
+        }
+        .button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="start-screen">
+        <h1>Space Shooter Game</h1>
+        <button class="button" onclick="startGame()">Start Game</button>
+    </div>
+    <div id="game-screen" style="display: none;">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+    </div>
+    <div id="game-over-screen" style="display: none;">
+        <h1>Game Over</h1>
+        <p id="final-score"></p>
+        <button class="button" onclick="restartGame()">Restart</button>
+    </div>
+
+    <audio id="shoot-sound" src="https://www.soundjay.com/mechanical/sounds/gun-shot-1.mp3" preload="auto"></audio>
+    <audio id="explosion-sound" src="https://www.soundjay.com/explosion/sounds/explosion-01.mp3" preload="auto"></audio>
+
+    <script>
+        let canvas;
+        let ctx;
+        let player;
+        let bullets = [];
+        let enemies = [];
+        let gameInterval;
+        let score = 0;
+        let enemySpeed = 1;
+        let lives = 3;
+        let shieldActive = false;
+        let shieldHits = 0;
+        let maxShieldHits = 2; // Máximo de golpes que puede recibir el escudo
+
+        const shootSound = document.getElementById('shoot-sound');
+        const explosionSound = document.getElementById('explosion-sound');
+
+        function startGame() {
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('game-screen').style.display = 'block';
+            document.getElementById('game-over-screen').style.display = 'none';
+
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+
+            player = {
+                x: canvas.width / 2,
+                y: canvas.height - 50,
+                size: 40, // Tamaño de la imagen de la nave, ajusta según sea necesario
+                speed: 5,
+                lives: 3
+            };
+
+            bullets = [];
+            enemies = [];
+            score = 0;
+            enemySpeed = 1;
+            lives = 3;
+            shieldActive = false;
+            shieldHits = 0;
+
+            createEnemies();
+            gameInterval = setInterval(updateGameArea, 20);
+
+            window.addEventListener('keydown', function(event) {
+                if (event.key === 'ArrowLeft' && player.x > 0) {
+                    player.x -= player.speed;
+                } else if (event.key === 'ArrowRight' && player.x < canvas.width - player.size) {
+                    player.x += player.speed;
+                } else if (event.key === ' ') { // Space para disparar
+                    shoot();
+                } else if (event.key === 'x') { // X para disparo especial
+                    specialAttack();
+                } else if (event.key === 'z') { // Z para activar/desactivar escudo
+                    toggleShield();
+                }
+            });
+        }
+
+        function shoot() {
+            bullets.push({ x: player.x + player.size / 2, y: player.y });
+            playShootSound();
+        }
+
+        function specialAttack() {
+            bullets.push({ x: player.x + player.size / 2, y: player.y });
+            bullets.push({ x: player.x + player.size / 2 - 10, y: player.y - 10 });
+            bullets.push({ x: player.x + player.size / 2 + 10, y: player.y - 10 });
+            playShootSound();
+        }
+
+        function toggleShield() {
+            shieldActive = !shieldActive;
+            shieldHits = 0;
+        }
+
+        function playShootSound() {
+            shootSound.currentTime = 0;
+            shootSound.play();
+        }
+
+        function playExplosionSound() {
+            explosionSound.currentTime = 0;
+            explosionSound.play();
+        }
+
+        function createEnemies() {
+            enemies = [];
+            for (let i = 0; i < 10; i++) {
+                enemies.push({
+                    x: Math.random() * (canvas.width - 30) + 15,
+                    y: -Math.random() * 500, // Caen desde arriba de la pantalla
+                    size: 20,
+                    color: 'red',
+                    speed: enemySpeed
+                });
+            }
+        }
+
+        function updateGameArea() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawPlayer();
+            drawBullets();
+            drawEnemies();
+            moveBullets();
+            moveEnemies();
+            detectCollisions();
+            drawScore();
+            updateLives();
+
+            if (enemies.length === 0) {
+                clearInterval(gameInterval);
+                enemySpeed += 0.5; // Aumentar la velocidad de los enemigos
+                createEnemies();
+                gameInterval = setInterval(updateGameArea, 20);
+            }
+
+            if (lives <= 0) {
+                clearInterval(gameInterval);
+                document.getElementById('game-screen').style.display = 'none';
+                document.getElementById('game-over-screen').style.display = 'block';
+                document.getElementById('final-score').textContent = 'Final Score: ' + score;
+            }
+        }
+
+        function drawPlayer() {
+            const playerImage = new Image();
+            playerImage.src = 'nave.png'; // Asegúrate de que la ruta de la imagen sea correcta
+
+            // Dibuja la imagen de la nave
+            ctx.drawImage(playerImage, player.x, player.y, player.size, player.size);
+
+            // Dibuja el escudo si está activo
+            if (shieldActive) {
+                ctx.strokeStyle = 'blue';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(player.x + player.size / 2, player.y + player.size / 2, 25, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+
+        function drawBullets() {
+            ctx.fillStyle = 'yellow';
+            bullets.forEach(bullet => {
+                ctx.fillRect(bullet.x, bullet.y, 5, 10);
+            });
+        }
+
+        function drawEnemies() {
+            ctx.fillStyle = 'red';
+            enemies.forEach(enemy => {
+                // Dibujar una forma de araña
+                ctx.beginPath();
+                ctx.moveTo(enemy.x + enemy.size / 2, enemy.y);
+                ctx.lineTo(enemy.x + enemy.size, enemy.y + enemy.size / 2);
+                ctx.lineTo(enemy.x + enemy.size / 2, enemy.y + enemy.size);
+                ctx.lineTo(enemy.x, enemy.y + enemy.size / 2);
+                ctx.closePath();
+                ctx.fill();
+            });
+        }
+
+        function moveBullets() {
+            bullets.forEach(bullet => {
+                bullet.y -= 5;
+            });
+            bullets = bullets.filter(bullet => bullet.y > 0);
+        }
+
+        function moveEnemies() {
+            enemies.forEach(enemy => {
+                enemy.y += enemy.speed;
+            });
+            enemies = enemies.filter(enemy => enemy.y < canvas.height);
+        }
+
+        function detectCollisions() {
+            bullets.forEach((bullet, bulletIndex) => {
+                enemies.forEach((enemy, enemyIndex) => {
+                    if (bullet.x < enemy.x + enemy.size &&
+                        bullet.x + 5 > enemy.x &&
+                        bullet.y < enemy.y + enemy.size &&
+                        bullet.y + 10 > enemy.y) {
+                        // Colisión detectada
+                        bullets.splice(bulletIndex, 1);
+                        enemies.splice(enemyIndex, 1);
+                        score += 10;
+                        playExplosionSound();
+                    }
+                });
+            });
+
+            enemies.forEach((enemy, enemyIndex) => {
+                if (player.x < enemy.x + enemy.size &&
+                    player.x + player.size > enemy.x &&
+                    player.y < enemy.y + enemy.size &&
+                    player.y + player.size > enemy.y) {
+                    // Colisión con la nave
+                    if (shieldActive && shieldHits < maxShieldHits) {
+                        shieldHits++;
+                        enemies.splice(enemyIndex, 1);
+                        playExplosionSound();
+                    } else {
+                        lives--;
+                        enemies.splice(enemyIndex, 1);
+                        playExplosionSound();
+                    }
+                }
+            });
+        }
+
+        function drawScore() {
+            ctx.font = '20px Arial';
+            ctx.fillStyle = 'white';
+            ctx.fillText('Score: ' + score, 10, 20);
+        }
+
+        function updateLives() {
+            ctx.font = '20px Arial';
+            ctx.fillStyle = 'white';
+            ctx.fillText('Lives: ' + lives, canvas.width - 100, 20);
+        }
+
+        function restartGame() {
+            document.getElementById('game-over-screen').style.display = 'none';
+            startGame();
+        }
+    </script>
+</body>
+</html>
